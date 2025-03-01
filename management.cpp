@@ -4,6 +4,8 @@
 #include <vector>
 #include <iomanip>
 #include <algorithm>
+#include <queue>
+#include <unordered_map>
 
 using namespace std;
 
@@ -22,10 +24,17 @@ struct Student {
     }
 };
 
+struct CompareStudents {
+    bool operator()(const Student& a, const Student& b) {
+        return a.grade > b.grade; // Min-heap based on grade
+    }
+};
+
 class StudentDatabase {
 private:
     vector<Student> students;
     const string filename = "students.dat";
+    unordered_map<int, Student> studentHashTable; // Hash table for faster lookups
 
     int findIndex(int code) const {
         for(size_t i = 0; i < students.size(); i++) {
@@ -49,6 +58,7 @@ private:
             file >> s.grade;
             file.ignore();
             students.push_back(s);
+            studentHashTable[s.code] = s; // Add to hash table
         }
         file.close();
     }
@@ -66,6 +76,28 @@ private:
         file.close();
     }
 
+    // QuickSort implementation to sort students by grade
+    void quickSort(vector<Student>& arr, int low, int high) {
+        if (low < high) {
+            int pi = partition(arr, low, high);
+            quickSort(arr, low, pi - 1);
+            quickSort(arr, pi + 1, high);
+        }
+    }
+
+    int partition(vector<Student>& arr, int low, int high) {
+        float pivot = arr[high].grade;
+        int i = low - 1;
+        for (int j = low; j < high; j++) {
+            if (arr[j].grade <= pivot) {
+                i++;
+                swap(arr[i], arr[j]);
+            }
+        }
+        swap(arr[i + 1], arr[high]);
+        return i + 1;
+    }
+
 public:
     StudentDatabase() {
         loadFromFile();
@@ -81,16 +113,12 @@ public:
             return;
         }
 
-
         cout << "Enter name: ";
+        cin.ignore();
         getline(cin, newStudent.name);
 
-        
         cout << "Enter surname: ";
-        cin.ignore();
         getline(cin, newStudent.surname);
-
-        
 
         cout << "Enter gender (M/F): ";
         cin >> newStudent.gender;
@@ -104,6 +132,7 @@ public:
         newStudent.grade = max(0.0f, min(20.0f, newStudent.grade));
 
         students.push_back(newStudent);
+        studentHashTable[newStudent.code] = newStudent; // Add to hash table
         saveToFile();
         cout << "Student added successfully!\n";
     }
@@ -113,12 +142,12 @@ public:
         cout << "Enter student code: ";
         cin >> code;
 
-        int index = findIndex(code);
-        if(index == -1) {
+        auto it = studentHashTable.find(code); // Use hash table for O(1) lookup
+        if(it != studentHashTable.end()) {
+            it->second.display();
+        } else {
             cout << "Student not found!\n";
-            return;
         }
-        students[index].display();
     }
 
     void searchByName() const {
@@ -150,6 +179,7 @@ public:
         }
 
         students.erase(students.begin() + index);
+        studentHashTable.erase(code); // Remove from hash table
         saveToFile();
         cout << "Student deleted successfully!\n";
     }
@@ -195,6 +225,7 @@ public:
             s.grade = max(0.0f, min(20.0f, s.grade));
         }
 
+        studentHashTable[code] = s; // Update hash table
         saveToFile();
         cout << "Student updated successfully!\n";
     }
@@ -210,6 +241,31 @@ public:
             s.display();
         }
     }
+
+    void sortStudentsByGrade() {
+        quickSort(students, 0, students.size() - 1);
+        cout << "Students sorted by grade!\n";
+    }
+
+    void findTopPerformers(int n) {
+        if (n > students.size()) {
+            cout << "Not enough students in the database.\n";
+            return;
+        }
+
+        // Use a priority queue with a custom comparator
+        priority_queue<Student, vector<Student>, CompareStudents> pq;
+        for (const auto& s : students) {
+            pq.push(s);
+            if (pq.size() > n) pq.pop();
+        }
+
+        cout << "Top " << n << " performers:\n";
+        while (!pq.empty()) {
+            pq.top().display();
+            pq.pop();
+        }
+    }
 };
 
 void displayMenu() {
@@ -220,7 +276,9 @@ void displayMenu() {
          << "4. Delete Student\n"
          << "5. Update Student\n"
          << "6. List All Students\n"
-         << "7. Exit\n"
+         << "7. Sort Students by Grade\n"
+         << "8. Find Top Performers\n"
+         << "9. Exit\n"
          << "Enter your choice: ";
 }
 
@@ -239,10 +297,18 @@ int main() {
             case 4: db.deleteStudent(); break;
             case 5: db.updateStudent(); break;
             case 6: db.listAll(); break;
-            case 7: cout << "Exiting...\n"; break;
+            case 7: db.sortStudentsByGrade(); break;
+            case 8: {
+                int n;
+                cout << "Enter the number of top performers to find: ";
+                cin >> n;
+                db.findTopPerformers(n);
+                break;
+            }
+            case 9: cout << "Exiting...\n"; break;
             default: cout << "Invalid choice! Try again.\n";
         }
-    } while(choice != 7);
+    } while(choice != 9);
 
     return 0;
 }
